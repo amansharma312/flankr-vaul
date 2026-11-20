@@ -1,6 +1,7 @@
 ## 0.1.1
 
 - Screenshots and a recording on pub.dev and in the README.
+- LICENSE: removed a third-party notice that was included by mistake.
 
 ## 0.1.0
 
