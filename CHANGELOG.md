@@ -1,3 +1,7 @@
+## 0.1.1
+
+- Screenshots and a recording on pub.dev and in the README.
+
 ## 0.1.0
 
 - First release: `showVaul`, `VaulRoute`, `VaulSnap`, `VaulStyle`, `VaulController` (`Vaul.of`), `VaulHandle`, `VaulScrollController`.

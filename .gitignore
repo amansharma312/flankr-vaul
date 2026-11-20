@@ -33,3 +33,6 @@ example/build/
 .idea/
 *.iml
 
+
+# Raw frames for screenshots/drawer.gif (see tool/make_gif.sh)
+screenshots/frames/

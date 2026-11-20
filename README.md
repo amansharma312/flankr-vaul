@@ -7,6 +7,13 @@ speed you gave it. While it's open, the page behind scales back and rounds its
 corners, like an iOS sheet. Lists inside hand their drags to the drawer, so
 you expand it by scrolling and pull it closed from the top of the list.
 
+<p>
+  <img src="https://raw.githubusercontent.com/amansharma312/flankr-vaul/main/screenshots/drawer.gif" width="200" alt="Dragging the drawer up to full height and down to close">
+  <img src="https://raw.githubusercontent.com/amansharma312/flankr-vaul/main/screenshots/fit-content.png" width="200" alt="A drawer that fits its content">
+  <img src="https://raw.githubusercontent.com/amansharma312/flankr-vaul/main/screenshots/snap-half.png" width="200" alt="Snap points: half height">
+  <img src="https://raw.githubusercontent.com/amansharma312/flankr-vaul/main/screenshots/dark-nested.png" width="200" alt="Dark mode, nested drawers">
+</p>
+
 Inspired by [Vaul](https://vaul.emilkowal.ski) by Emil Kowalski. Built only on
 Flutter's widgets layer: it works the same in Material, Cupertino and custom
 design-system apps.
