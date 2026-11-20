@@ -1,14 +1,4 @@
-part of 'route.dart';
-
-/// Above this speed (logical pixels per second) a release counts as a fling
-/// and moves one snap in its direction, instead of to the nearest.
-const double _flingVelocity = 500;
-
-/// Released below this fraction of its lowest snap, the drawer closes.
-const double _closeFraction = 0.75;
-
-/// How much a drag past either end still moves the drawer.
-const double _rubberBand = 0.25;
+part of '../routes/vaul_route.dart';
 
 class _VaulSheet extends StatefulWidget {
   const _VaulSheet({required this.route});
@@ -45,6 +35,8 @@ class _VaulSheetState extends State<_VaulSheet>
     this,
     debugLabel: 'VaulScrollController',
   );
+
+  /// Ticks whenever the drawer moves.
   late final Listenable _motion = Listenable.merge([_progress, _anchor]);
 
   List<double> _snaps = const [0];
@@ -70,6 +62,10 @@ class _VaulSheetState extends State<_VaulSheet>
   bool get _disableAnimations =>
       _route.disableAnimations ||
       (MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+
+  /// Whether the route is open and not on its way out.
+  bool get _canMove =>
+      _route.isActive && _progress.status != AnimationStatus.reverse;
 
   double get _lowest => _snaps.first;
 
@@ -119,56 +115,38 @@ class _VaulSheetState extends State<_VaulSheet>
 
   @override
   void beginDrag() {
-    if (_progress.status == AnimationStatus.reverse) return;
-    _stop();
+    if (_canMove) _stop();
   }
 
   @override
   void dragBy(double dy) {
-    if (!_route.isActive || _progress.status == AnimationStatus.reverse) return;
+    if (!_canMove) return;
     _stop();
-    final current = visible;
-    var target = current - dy;
-    final pastTop = target > maxExtent || current > maxExtent;
-    final pastBottom =
-        !_route.dismissible && (target < _lowest || current < _lowest);
-    if (pastTop || pastBottom) target = current - dy * _rubberBand;
-    _setVisible(math.max(target, 0));
+    _setVisible(
+      dragTarget(
+        current: visible,
+        dy: dy,
+        min: _lowest,
+        max: maxExtent,
+        dismissible: _route.dismissible,
+      ),
+    );
   }
 
   @override
   void release(double velocity) {
-    if (!_route.isActive || _progress.status == AnimationStatus.reverse) return;
-    final current = visible;
-    final target = _pickRest(current, velocity);
-    if (target == null) {
-      final anchor = math.max(_anchorHeight, 1.0);
-      _route._close(null, velocity: -velocity / anchor);
+    if (!_canMove) return;
+    final index = restingSnap(
+      snaps: _snaps,
+      current: visible,
+      velocity: velocity,
+      dismissible: _route.dismissible,
+    );
+    if (index == null) {
+      _route._close(null, velocity: -velocity / math.max(_anchorHeight, 1));
     } else {
-      _settle(target, velocity: velocity);
+      _settle(index, velocity: velocity);
     }
-  }
-
-  /// The snap index to come to rest at, or null to close.
-  int? _pickRest(double current, double velocity) {
-    if (velocity.abs() > _flingVelocity) {
-      if (velocity > 0) {
-        // Down: the next snap below, or close from the lowest.
-        final below = _snaps.lastIndexWhere((s) => s < current - 1);
-        if (below >= 0) return below;
-        return _route.dismissible ? null : 0;
-      }
-      final above = _snaps.indexWhere((s) => s > current + 1);
-      return above >= 0 ? above : _snaps.length - 1;
-    }
-    if (_route.dismissible && current < _lowest * _closeFraction) return null;
-    var nearest = 0;
-    for (var i = 1; i < _snaps.length; i++) {
-      if ((_snaps[i] - current).abs() < (_snaps[nearest] - current).abs()) {
-        nearest = i;
-      }
-    }
-    return nearest;
   }
 
   // -------------------------------------------------------- VaulController
@@ -187,8 +165,7 @@ class _VaulSheetState extends State<_VaulSheet>
 
   @override
   void snapTo(int index) {
-    if (!_route.isActive || _progress.status == AnimationStatus.reverse) return;
-    _settle(index.clamp(0, _snaps.length - 1));
+    if (_canMove) _settle(index.clamp(0, _snaps.length - 1));
   }
 
   @override
@@ -201,8 +178,8 @@ class _VaulSheetState extends State<_VaulSheet>
     if (_progress.isAnimating) _route._stopProgress();
   }
 
-  /// Puts the drawer at [height] right away, without changing what it is
-  /// resting at.
+  /// Puts the drawer at [height] right away, without changing which snap it
+  /// is resting at.
   void _setVisible(double height) {
     _resting = false;
     if (height >= _lowest) {
@@ -218,30 +195,28 @@ class _VaulSheetState extends State<_VaulSheet>
   /// pixels per second, positive moving down).
   void _settle(int index, {double velocity = 0}) {
     _setSnap(index);
-    final target = _snaps[index];
     final current = visible;
+    _resting = false;
     if (_disableAnimations) {
-      _resting = true;
       _route._setProgress(1);
-      _updateExtent();
+      _rest(index);
       return;
     }
     if (current < _lowest && index == 0) {
-      // Below the lowest snap: spring the route back up so the page behind
+      // Below the lowest snap: spring the route back up, so the page behind
       // scales with it.
-      _resting = false;
       _anchor.value = _lowest;
-      final lowest = math.max(_lowest, 1.0);
-      _route._springProgressTo(1, -velocity / lowest).then((_) => _rest(index));
+      _route
+          ._springProgressTo(1, -velocity / math.max(_lowest, 1))
+          .then((_) => _rest(index));
       return;
     }
     // At or above the lowest snap, or flung up from below it: hold progress
     // at 1 and spring the height.
-    _resting = false;
     _anchor.value = current;
     _route._setProgress(1);
     _anchor
-        .animateWith(_spring(current, target, -velocity))
+        .animateWith(springTo(current, _snaps[index], velocity: -velocity))
         .then((_) => _rest(index));
   }
 
@@ -263,19 +238,13 @@ class _VaulSheetState extends State<_VaulSheet>
   Widget build(BuildContext context) {
     final style = _route.style;
     final brightness = MediaQuery.platformBrightnessOf(context);
-    final media = MediaQuery.of(context);
+    final surface = style.resolveColor(brightness);
+    final top = BorderRadius.vertical(top: Radius.circular(style.radius));
     final fitsContent = _route.snaps == null;
-    final content = MediaQuery.removeViewInsets(
-      context: context,
-      removeBottom: true,
-      child: MediaQuery.removePadding(
-        context: context,
-        removeTop: true,
-        child: _withTextStyle(
-          context,
-          style.resolveTextStyle(brightness),
-          Builder(builder: _route.builder),
-        ),
+    final content = ContentInsets(
+      child: FallbackTextStyle(
+        style: style.resolveTextStyle(brightness),
+        child: Builder(builder: _route.builder),
       ),
     );
 
@@ -288,16 +257,12 @@ class _VaulSheetState extends State<_VaulSheet>
       onVerticalDragCancel: () => release(0),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: style.resolveColor(brightness),
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(style.radius),
-          ),
+          color: surface,
+          borderRadius: top,
           boxShadow: style.shadow,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(style.radius),
-          ),
+          borderRadius: top,
           child: Column(
             mainAxisSize: fitsContent ? MainAxisSize.min : MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -321,76 +286,28 @@ class _VaulSheetState extends State<_VaulSheet>
         automaticallyInheritForPlatforms: TargetPlatform.values.toSet(),
         child: Semantics(
           explicitChildNodes: true,
-          child: _ScaleUnderDrawer(
-            above: _route._above,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: ValueListenableBuilder<VaulRoute<dynamic>?>(
+            valueListenable: _route._above,
+            child: KeyboardLift(
               child: _SheetLayout(
                 state: this,
-                topReserve: media.padding.top + style.topGap,
+                topReserve: MediaQuery.paddingOf(context).top + style.topGap,
                 maxWidth: style.maxWidth,
-                fillColor: style.resolveColor(brightness),
+                fillColor: surface,
                 child: RepaintBoundary(child: sheet),
               ),
             ),
+            // Scales back while another drawer is open over this one.
+            builder:
+                (context, above, child) => ScaleBack(
+                  animation: above?.animation ?? kAlwaysDismissedAnimation,
+                  inset: VaulConstants.nestedInset,
+                  alignment: Alignment.bottomCenter,
+                  child: child!,
+                ),
           ),
         ),
       ),
-    );
-  }
-
-  /// Gives the content [fallback] as its default text style when it has none
-  /// of its own, so plain [Text] never renders in the debug style.
-  ///
-  /// MaterialApp supplies a deliberately loud style (red, double yellow
-  /// underline) above every route and expects a Material to replace it; that
-  /// one counts as none.
-  static Widget _withTextStyle(
-    BuildContext context,
-    TextStyle fallback,
-    Widget child,
-  ) {
-    final inherited =
-        context.dependOnInheritedWidgetOfExactType<DefaultTextStyle>();
-    final missing =
-        inherited == null ||
-        (inherited.style.decoration == TextDecoration.underline &&
-            inherited.style.decorationStyle == TextDecorationStyle.double);
-    if (!missing) return child;
-    return DefaultTextStyle(style: fallback, child: child);
-  }
-}
-
-/// Scales a drawer back, narrower and anchored at the bottom, while another
-/// drawer is open over it.
-class _ScaleUnderDrawer extends StatelessWidget {
-  const _ScaleUnderDrawer({required this.above, required this.child});
-
-  final ValueListenable<VaulRoute<dynamic>?> above;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<VaulRoute<dynamic>?>(
-      valueListenable: above,
-      child: child,
-      builder: (context, route, child) {
-        final animation = route?.animation;
-        if (animation == null) return child!;
-        return AnimatedBuilder(
-          animation: animation,
-          child: child,
-          builder: (context, child) {
-            final t = animation.value.clamp(0.0, 1.0);
-            final width = MediaQuery.sizeOf(context).width;
-            return Transform.scale(
-              scale: 1 - t * math.min(32 / math.max(width, 1), 0.2),
-              alignment: Alignment.bottomCenter,
-              child: child,
-            );
-          },
-        );
-      },
     );
   }
 }

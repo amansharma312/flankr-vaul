@@ -1,48 +1,25 @@
 import 'dart:math' as math;
 
+import 'package:flankr_vaul/src/controller/vaul_controller.dart';
+import 'package:flankr_vaul/src/controller/vaul_scroll_controller.dart';
+import 'package:flankr_vaul/src/model/vaul_snap.dart';
+import 'package:flankr_vaul/src/model/vaul_style.dart';
+import 'package:flankr_vaul/src/resources/vaul_constants.dart';
+import 'package:flankr_vaul/src/utility/snap_math.dart';
+import 'package:flankr_vaul/src/utility/vaul_spring.dart';
+import 'package:flankr_vaul/src/widgets/drawer_insets.dart';
+import 'package:flankr_vaul/src/widgets/fallback_text_style.dart';
+import 'package:flankr_vaul/src/widgets/scale_back.dart';
+import 'package:flankr_vaul/src/widgets/vaul_handle.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
-import 'controller.dart';
-import 'handle.dart';
-import 'scroll.dart';
-import 'snap.dart';
-import 'style.dart';
-
-part 'layout.dart';
-part 'sheet.dart';
-
-/// The spring every drawer movement follows: critically damped, so it eases
-/// in without bouncing past where it is going.
-final SpringDescription vaulSpring = SpringDescription.withDampingRatio(
-  mass: 1,
-  stiffness: 320,
-  ratio: 1,
-);
-
-/// A [vaulSpring] from [from] to [to], starting at [velocity], that lands
-/// exactly on [to] (a plain spring stops within a small tolerance of it).
-Simulation _spring(double from, double to, double velocity) =>
-    _LandingSimulation(SpringSimulation(vaulSpring, from, to, velocity), to);
-
-class _LandingSimulation extends Simulation {
-  _LandingSimulation(this._inner, this._end);
-
-  final Simulation _inner;
-  final double _end;
-
-  @override
-  double x(double time) => _inner.isDone(time) ? _end : _inner.x(time);
-
-  @override
-  double dx(double time) => _inner.isDone(time) ? 0 : _inner.dx(time);
-
-  @override
-  bool isDone(double time) => _inner.isDone(time);
-}
+// The sheet and its layout reach into the route's animation controller, which
+// only the route itself may touch, so they share its library.
+part '../widgets/sheet_layout.dart';
+part '../widgets/vaul_sheet.dart';
 
 /// Opens a drawer over the current page and returns what it was closed with.
 ///
@@ -110,9 +87,17 @@ class VaulRoute<T> extends PopupRoute<T> {
   /// Themes from where the drawer was opened, re-applied inside it.
   final CapturedThemes? capturedThemes;
 
-  /// Velocity (in route progress per second) to start the closing spring with,
+  /// A drawer opened over this one, while it is open or animating away; this
+  /// drawer scales back in step with it. Tracked here rather than through
+  /// [delegatedTransition], which Flutter only applies between routes with
+  /// compatible type arguments.
+  final ValueNotifier<VaulRoute<dynamic>?> _above = ValueNotifier(null);
+
+  /// Velocity (route progress per second) to start the closing spring with,
   /// set when a fling closes the drawer.
   double _closingVelocity = 0;
+
+  // ------------------------------------------------------------ route setup
 
   @override
   Color? get barrierColor => style.barrierColor;
@@ -125,14 +110,14 @@ class VaulRoute<T> extends PopupRoute<T> {
 
   @override
   Duration get transitionDuration =>
-      disableAnimations ? Duration.zero : const Duration(milliseconds: 400);
+      disableAnimations ? Duration.zero : VaulConstants.transitionDuration;
 
   @override
   Simulation? createSimulation({required bool forward}) {
     if (disableAnimations) return null;
     final velocity = forward ? 0.0 : _closingVelocity;
     _closingVelocity = 0;
-    return _spring(controller!.value, forward ? 1 : 0, velocity);
+    return springTo(controller!.value, forward ? 1 : 0, velocity: velocity);
   }
 
   @override
@@ -157,12 +142,6 @@ class VaulRoute<T> extends PopupRoute<T> {
     Widget child,
   ) => child; // The sheet moves itself.
 
-  /// A drawer opened over this one, while it is open or animating away; this
-  /// drawer scales back in step with it. Tracked here rather than through
-  /// [delegatedTransition], which Flutter only applies between routes with
-  /// compatible type arguments.
-  final ValueNotifier<VaulRoute<dynamic>?> _above = ValueNotifier(null);
-
   @override
   void didChangeNext(Route<dynamic>? nextRoute) {
     super.didChangeNext(nextRoute);
@@ -171,29 +150,22 @@ class VaulRoute<T> extends PopupRoute<T> {
     }
   }
 
-  void _watchAbove(VaulRoute<dynamic> above) {
-    final animation = above.animation;
-    if (animation == null || _above.value == above) return;
-    _above.value = above;
-    void onStatus(AnimationStatus status) {
-      if (!status.isDismissed) return;
-      animation.removeStatusListener(onStatus);
-      if (_above.value == above) _above.value = null;
-    }
-
-    animation.addStatusListener(onStatus);
-  }
-
   @override
   void dispose() {
     _above.dispose();
     super.dispose();
   }
 
+  // ------------------------------------------- used by the sheet (same library)
+
   void _stopProgress() => controller?.stop();
 
   void _setProgress(double value) {
-    controller!.value = value.clamp(0.0, 1.0);
+    final clamped = value.clamp(0.0, 1.0);
+    // Setting an AnimationController's value notifies its listeners even when
+    // it is unchanged; skip that while a drag holds the drawer at progress 1.
+    if (controller!.value == clamped) return;
+    controller!.value = clamped;
   }
 
   TickerFuture _springProgressTo(double target, double velocity) {
@@ -202,7 +174,7 @@ class VaulRoute<T> extends PopupRoute<T> {
       return TickerFuture.complete();
     }
     return controller!.animateWith(
-      _spring(controller!.value, target, velocity),
+      springTo(controller!.value, target, velocity: velocity),
     );
   }
 
@@ -222,6 +194,21 @@ class VaulRoute<T> extends PopupRoute<T> {
     }
   }
 
+  // ---------------------------------------------------------- scaling back
+
+  void _watchAbove(VaulRoute<dynamic> above) {
+    final animation = above.animation;
+    if (animation == null || _above.value == above) return;
+    _above.value = above;
+    void onStatus(AnimationStatus status) {
+      if (!status.isDismissed) return;
+      animation.removeStatusListener(onStatus);
+      if (_above.value == above) _above.value = null;
+    }
+
+    animation.addStatusListener(onStatus);
+  }
+
   /// Scales the page below back from the edges and rounds its corners, in step
   /// with how far this drawer is open.
   Widget? _scaleBackground(
@@ -232,31 +219,14 @@ class VaulRoute<T> extends PopupRoute<T> {
     Widget? child,
   ) {
     // A drawer below scales itself (see [_above]).
-    if (ModalRoute.of(context) is VaulRoute) return null;
-    return AnimatedBuilder(
+    if (child == null || ModalRoute.of(context) is VaulRoute) return null;
+    return ScaleBack(
       animation: secondaryAnimation,
+      inset: VaulConstants.pageInset,
+      lift: MediaQuery.paddingOf(context).top + VaulConstants.pageLift,
+      radius: VaulConstants.pageRadius,
+      backdrop: style.backdropColor,
       child: child,
-      builder: (context, child) {
-        final t = secondaryAnimation.value.clamp(0.0, 1.0);
-        if (t == 0 || child == null) return child ?? const SizedBox.shrink();
-        final size = MediaQuery.sizeOf(context);
-        final top = MediaQuery.paddingOf(context).top + 14;
-        final scale = 1 - t * math.min(26 / math.max(size.width, 1), 0.2);
-        return ColoredBox(
-          color: style.backdropColor,
-          child: Transform.translate(
-            offset: Offset(0, t * top),
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.topCenter,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(t * 12),
-                child: child,
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

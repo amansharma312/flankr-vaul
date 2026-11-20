@@ -1,3 +1,4 @@
+import 'package:flankr_vaul/src/resources/vaul_colors.dart';
 import 'package:flutter/widgets.dart';
 
 /// How a drawer looks.
@@ -8,12 +9,12 @@ class VaulStyle {
     this.radius = 16,
     this.handle = true,
     this.handleColor,
-    this.barrierColor = const Color(0x66000000),
+    this.barrierColor = VaulColors.barrier,
     this.scaleBackground = true,
-    this.backdropColor = const Color(0xFF000000),
+    this.backdropColor = VaulColors.backdrop,
     this.topGap = 24,
     this.maxWidth = 640,
-    this.shadow = const [BoxShadow(color: Color(0x1F000000), blurRadius: 24)],
+    this.shadow = const [BoxShadow(color: VaulColors.shadow, blurRadius: 24)],
     this.textStyle,
   });
 
@@ -58,24 +59,15 @@ class VaulStyle {
       textStyle ??
       TextStyle(
         fontSize: 14,
-        color:
-            brightness == Brightness.dark
-                ? const Color(0xFFFFFFFF)
-                : const Color(0xDE000000),
+        color: VaulColors.text(brightness),
         decoration: TextDecoration.none,
       );
 
   Color resolveColor(Brightness brightness) =>
-      color ??
-      (brightness == Brightness.dark
-          ? const Color(0xFF1C1C1E)
-          : const Color(0xFFFFFFFF));
+      color ?? VaulColors.surface(brightness);
 
   Color resolveHandleColor(Brightness brightness) =>
-      handleColor ??
-      (brightness == Brightness.dark
-          ? const Color(0x52FFFFFF)
-          : const Color(0x33000000));
+      handleColor ?? VaulColors.handle(brightness);
 
   VaulStyle copyWith({
     Color? color,

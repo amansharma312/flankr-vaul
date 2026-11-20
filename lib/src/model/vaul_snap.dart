@@ -56,16 +56,3 @@ final class _PixelSnap extends VaulSnap {
   @override
   String toString() => 'VaulSnap.pixels($value)';
 }
-
-/// Resolves [snaps] against [available] height, lowest first, without
-/// duplicates. With no snaps the drawer rests at its content's height.
-List<double> resolveSnaps(
-  List<VaulSnap>? snaps, {
-  required double available,
-  required double content,
-}) {
-  if (snaps == null || snaps.isEmpty) return [content.clamp(0, available)];
-  final heights =
-      snaps.map((s) => s.resolve(available)).toSet().toList()..sort();
-  return heights;
-}

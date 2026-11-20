@@ -1,4 +1,4 @@
-part of 'route.dart';
+part of '../routes/vaul_route.dart';
 
 /// Lays the drawer out against the bottom edge and slides it to its current
 /// height at paint time, so dragging repaints without relaying out.

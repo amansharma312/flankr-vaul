@@ -1,6 +1,6 @@
+import 'package:flankr_vaul/src/controller/vaul_controller.dart';
+import 'package:flankr_vaul/src/resources/vaul_constants.dart';
 import 'package:flutter/widgets.dart';
-
-import 'controller.dart';
 
 /// The grab handle at the top of a drawer. Tapping it moves the drawer to its
 /// next snap, wrapping back to the lowest.
@@ -8,8 +8,8 @@ class VaulHandle extends StatelessWidget {
   const VaulHandle({
     super.key,
     required this.color,
-    this.width = 36,
-    this.height = 5,
+    this.width = VaulConstants.handleWidth,
+    this.height = VaulConstants.handleHeight,
   });
 
   final Color color;
@@ -36,7 +36,9 @@ class VaulHandle extends StatelessWidget {
         // it is read at tap time.
         onTap: controller == null ? null : () => _cycle(controller),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            vertical: VaulConstants.handlePadding,
+          ),
           child: Center(child: pill),
         ),
       ),
