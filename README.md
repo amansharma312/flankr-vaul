@@ -151,9 +151,13 @@ button for screen readers.
 
 ## Good to know
 
-- The page behind scales back when it's a `MaterialPageRoute`,
-  `CupertinoPageRoute`, or a `go_router` page built on them. Routes made with a
-  plain `PageRouteBuilder` stay still.
+- The page behind scales back whatever kind of route it is:
+  `MaterialPageRoute`, `CupertinoPageRoute`, a plain `PageRouteBuilder`,
+  GetX (`GetPage`, `Get.to`), go_router, auto_route or your own. Nothing to set
+  up, and it works with any state management.
+- Closing it any way completes its future: `Vaul.of(context).close(result)`,
+  `Navigator.pop(context, result)`, or your router's own back (`Get.back`,
+  `context.pop`).
 - The drawer is pushed on the root navigator by default; pass
   `useRootNavigator: false` to use the nearest one.
 - To push it yourself (to name it with `RouteSettings`, say), use `VaulRoute`.

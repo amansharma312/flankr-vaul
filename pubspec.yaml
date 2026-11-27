@@ -2,7 +2,7 @@ name: flankr_vaul
 description: >-
   A drawer for Flutter that feels native: snap points, velocity-aware flings,
   scroll hand-off, and the page behind it scaling back like an iOS sheet.
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/amansharma312/flankr-vaul
 issue_tracker: https://github.com/amansharma312/flankr-vaul/issues
 

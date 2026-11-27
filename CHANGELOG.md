@@ -1,3 +1,9 @@
+## 0.1.2
+
+- The page behind now scales back on every route type, not just Material and
+  Cupertino pages: GetX pages, plain `PageRouteBuilder`s, custom routes and
+  pages with another result type. No setup needed.
+
 ## 0.1.1
 
 - Screenshots and a recording on pub.dev and in the README.

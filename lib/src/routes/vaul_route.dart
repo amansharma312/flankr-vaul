@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flankr_vaul/src/controller/vaul_controller.dart';
@@ -97,6 +98,13 @@ class VaulRoute<T> extends PopupRoute<T> {
   /// set when a fling closes the drawer.
   double _closingVelocity = 0;
 
+  /// The page this drawer opened over, which it scales back. Held so the
+  /// drawer can hand the page its transition directly: Flutter only passes a
+  /// [delegatedTransition] down when the page route agrees to it (Material and
+  /// Cupertino do; GetX, custom `PageRouteBuilder`s and pages with another
+  /// result type don't), and this works the same for every route.
+  ModalRoute<dynamic>? _below;
+
   // ------------------------------------------------------------ route setup
 
   @override
@@ -143,6 +151,37 @@ class VaulRoute<T> extends PopupRoute<T> {
   ) => child; // The sheet moves itself.
 
   @override
+  void install() {
+    super.install();
+    animation!.addListener(_claimBelow);
+    animation!.addStatusListener(_onStatus);
+  }
+
+  @override
+  void didChangePrevious(Route<dynamic>? previousRoute) {
+    super.didChangePrevious(previousRoute);
+    // A drawer below scales itself (see [_above]); only a page is handed over.
+    final below =
+        previousRoute is ModalRoute && previousRoute is! VaulRoute
+            ? previousRoute
+            : null;
+    if (below != _below) _releaseBelow();
+    _below = below;
+    // Flutter resets the page's transition while it links the routes; take
+    // it back before the next frame.
+    scheduleMicrotask(_claimBelow);
+  }
+
+  @override
+  bool didPop(T? result) {
+    final popped = super.didPop(result);
+    // Popping resets the page's transition too, before the closing animation
+    // has run; take it back so the page eases out with the drawer.
+    scheduleMicrotask(_claimBelow);
+    return popped;
+  }
+
+  @override
   void didChangeNext(Route<dynamic>? nextRoute) {
     super.didChangeNext(nextRoute);
     if (nextRoute is VaulRoute && nextRoute.style.scaleBackground) {
@@ -152,6 +191,7 @@ class VaulRoute<T> extends PopupRoute<T> {
 
   @override
   void dispose() {
+    _releaseBelow();
     _above.dispose();
     super.dispose();
   }
@@ -195,6 +235,49 @@ class VaulRoute<T> extends PopupRoute<T> {
   }
 
   // ---------------------------------------------------------- scaling back
+
+  void _onStatus(AnimationStatus status) {
+    if (status.isDismissed) _releaseBelow();
+  }
+
+  /// Hands the page below this drawer's scale-back, while it is opening, open
+  /// or closing. Runs on every tick, so it also wins back the page whenever
+  /// Flutter resets it; once set, re-setting is a no-op.
+  void _claimBelow() {
+    final below = _below;
+    if (below == null || !style.scaleBackground || !below.isActive) return;
+    if (animation?.isDismissed ?? true) return;
+    // A page route that refuses the transition is also cut off from this
+    // drawer's animation (its secondary animation is parked as dismissed), so
+    // it would neither rebuild as the drawer moves nor apply the transition.
+    // Its secondary animation is a proxy: point it at this drawer.
+    final secondary = below.secondaryAnimation;
+    final drawer = animation;
+    if (secondary is ProxyAnimation &&
+        drawer != null &&
+        secondary.parent != drawer) {
+      secondary.parent = drawer;
+    }
+    final scale = _scaleBackground;
+    // ignore: invalid_use_of_visible_for_testing_member
+    if (below.receivedTransition == scale) return;
+    // ignore: invalid_use_of_visible_for_testing_member
+    below.receivedTransition = scale;
+  }
+
+  /// Gives the page back its own transitions once this drawer has closed.
+  void _releaseBelow() {
+    final below = _below;
+    if (below == null) return;
+    final secondary = below.secondaryAnimation;
+    if (secondary is ProxyAnimation && secondary.parent == animation) {
+      secondary.parent = kAlwaysDismissedAnimation;
+    }
+    // ignore: invalid_use_of_visible_for_testing_member
+    if (below.receivedTransition != _scaleBackground) return;
+    // ignore: invalid_use_of_visible_for_testing_member
+    below.receivedTransition = null;
+  }
 
   void _watchAbove(VaulRoute<dynamic> above) {
     final animation = above.animation;
