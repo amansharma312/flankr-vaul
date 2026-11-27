@@ -49,7 +49,9 @@ void main() {
     final context = await _pumpStubbornPage(tester);
     final before = _pageRect(tester);
     _open(context);
+    // The spring is timed from the first frame that shows the drawer.
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 80));
     expect(_pageRect(tester).width, lessThan(before.width));
 

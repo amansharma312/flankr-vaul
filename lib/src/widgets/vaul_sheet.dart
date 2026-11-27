@@ -46,6 +46,11 @@ class _VaulSheetState extends State<_VaulSheet>
     super.initState();
     _motion.addListener(_updateExtent);
     _progress.addStatusListener(_onRouteStatus);
+    // Time the opening from the first frame that shows the drawer, however
+    // long building it took (see VaulRoute._restartOpening).
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _route._restartOpening();
+    });
   }
 
   @override

@@ -1,3 +1,10 @@
+## 0.1.3
+
+- The opening animation always plays in full. It used to be skipped when the
+  frame that first builds the drawer was slow (heavy content, a first-run
+  shader, a busy phone): the drawer appeared already open. The spring is now
+  timed from the first frame that shows the drawer.
+
 ## 0.1.2
 
 - The page behind now scales back on every route type, not just Material and

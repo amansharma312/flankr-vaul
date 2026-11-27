@@ -200,6 +200,26 @@ class VaulRoute<T> extends PopupRoute<T> {
 
   void _stopProgress() => controller?.stop();
 
+  /// Restarts the opening spring from where it stands. Called once the frame
+  /// that first built the drawer is on screen.
+  ///
+  /// Flutter times a route's opening from the first frame after the push.
+  /// That frame also builds and lays out the drawer's content for the first
+  /// time; when it is slow (heavy content, a first-run shader, a busy phone),
+  /// the next frame's clock reads the spring as nearly over and the drawer
+  /// appears without opening. Restarting here times the spring from the
+  /// first frame that can show it.
+  void _restartOpening() {
+    final controller = this.controller;
+    if (controller == null || !isActive || disableAnimations) return;
+    // Only the push's own spring: not a drag, a close or a finished opening.
+    if (!controller.isAnimating ||
+        controller.status != AnimationStatus.forward) {
+      return;
+    }
+    controller.animateWith(springTo(controller.value, 1));
+  }
+
   void _setProgress(double value) {
     final clamped = value.clamp(0.0, 1.0);
     // Setting an AnimationController's value notifies its listeners even when
