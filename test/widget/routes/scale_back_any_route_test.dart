@@ -2,15 +2,7 @@ import 'package:flankr_vaul/flankr_vaul.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// A page route that refuses every outgoing transition, the way GetX's
-/// `GetPageRoute` does for anything that isn't another GetX page.
-class _StubbornRoute<T> extends PageRouteBuilder<T> {
-  _StubbornRoute(WidgetBuilder builder)
-    : super(pageBuilder: (context, _, _) => builder(context));
-
-  @override
-  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => false;
-}
+import '../../integration/fixtures/drawer_harness.dart';
 
 const _pageKey = Key('page');
 
@@ -73,7 +65,7 @@ void main() {
   testWidgets('a route that refuses transitions still scales back', (
     tester,
   ) async {
-    await _pumpRoute(tester, () => _StubbornRoute<void>(_page));
+    await _pumpRoute(tester, () => StubbornRoute<void>(_page));
     await _expectScalesBackAndRestores(tester);
   });
 
@@ -94,7 +86,7 @@ void main() {
   ) async {
     await _pumpRoute(
       tester,
-      () => _StubbornRoute<void>((context) => _page(context, scale: false)),
+      () => StubbornRoute<void>((context) => _page(context, scale: false)),
     );
     final before = _pageRect(tester);
     await tester.tap(find.text('Open'));

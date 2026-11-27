@@ -126,3 +126,13 @@ Future<BuildContext> pumpPage(WidgetTester tester, {Widget? page}) async {
   );
   return pageContext;
 }
+
+/// A page route that refuses every outgoing transition, the way GetX's
+/// `GetPageRoute` does for anything that isn't another GetX page.
+class StubbornRoute<T> extends PageRouteBuilder<T> {
+  StubbornRoute(WidgetBuilder builder)
+    : super(pageBuilder: (context, _, _) => builder(context));
+
+  @override
+  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => false;
+}
